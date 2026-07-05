@@ -1314,6 +1314,18 @@ def get_slime_extra_args_provider(add_custom_arguments=None):
                     "The function should have the signature `def convert_samples_to_train_data(args, samples) -> dict`."
                 ),
             )
+            parser.add_argument(
+                "--custom-dp-schedule-path",
+                type=str,
+                default=None,
+                help=(
+                    "Path to a custom function that builds rollout DP/microbatch schedules. "
+                    "If set, this function replaces slime.utils.dp_schedule.build_dp_schedule. "
+                    "The function should have the signature "
+                    "`def schedule(args, train_parallel_config, total_lengths, *, global_batch_size, group_indices) "
+                    "-> (partitions, micro_batch_indices, num_microbatches, global_batch_sizes)`."
+                ),
+            )
             return parser
 
         def add_rollout_buffer_arguments(parser):

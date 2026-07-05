@@ -380,6 +380,10 @@ class RolloutManager:
             self.custom_convert_samples_to_train_data_func = load_function(
                 self.args.custom_convert_samples_to_train_data_path
             )
+        self.custom_dp_schedule_func = None
+        custom_dp_schedule_path = getattr(self.args, "custom_dp_schedule_path", None)
+        if custom_dp_schedule_path is not None:
+            self.custom_dp_schedule_func = load_function(custom_dp_schedule_path)
         logger.info(f"import {self.args.rollout_function_path} as generate_rollout function.")
         logger.info(f"import {self.args.eval_function_path} as eval_generate_rollout function.")
 
@@ -753,20 +757,17 @@ class RolloutManager:
 
     def _split_train_data_by_dp(self, data):
         """Compute the DP/mbs schedule and package each rank's rollout_data
-        into a Ray Box. The schedule itself is computed by
+        into a Ray Box. By default, the schedule itself is computed by
         :func:`build_dp_schedule` so it stays unit-testable without Ray/sglang.
-
-        Step split is by group id (``samples[i].group_id``, falling back to
-        ``samples[i].index``); each step holds exactly ``args.global_batch_size``
-        groups so the training step count is fixed at
-        ``rollout_batch_size * n_samples_per_prompt // global_batch_size``
-        regardless of how many training samples each group produced.
+        ``--custom-dp-schedule-path`` can replace only that scheduling decision;
+        the packaging below stays unchanged.
         """
         dp_size = self.train_parallel_config["dp_size"]
         total_lengths = [len(t) for t in data["tokens"]]
         data["total_lengths"] = total_lengths
 
-        partitions, micro_batch_indices, num_microbatches, global_batch_sizes = build_dp_schedule(
+        build_dp_schedule_func = self.custom_dp_schedule_func or build_dp_schedule
+        partitions, micro_batch_indices, num_microbatches, global_batch_sizes = build_dp_schedule_func(
             self.args,
             self.train_parallel_config,
             total_lengths,
