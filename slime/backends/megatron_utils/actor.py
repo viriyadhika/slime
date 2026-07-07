@@ -4,7 +4,6 @@ import random
 from argparse import Namespace
 from contextlib import nullcontext
 
-import numpy as np
 import ray
 import torch
 import torch.distributed as dist
@@ -228,23 +227,8 @@ class MegatronTrainRayActor(TrainRayActor):
             rollout_data["group_mask_sums"] = torch.tensor(
                 rollout_data["group_mask_sums"], dtype=torch.float32, device=torch.cuda.current_device()
             )
-        if "multimodal_train_inputs" in rollout_data:
-            # Move multimodal training tensors to GPU in advance
-            rollout_data["multimodal_train_inputs"] = [
-                (
-                    {
-                        key: (
-                            torch.from_numpy(v.copy()).to(device=torch.cuda.current_device())
-                            if isinstance(v, np.ndarray)
-                            else v.to(device=torch.cuda.current_device())
-                        )
-                        for key, v in mm_dict.items()
-                    }
-                    if mm_dict is not None
-                    else None
-                )
-                for mm_dict in rollout_data["multimodal_train_inputs"]
-            ]
+        # Keep multimodal training tensors CPU-side here. get_batch moves only
+        # the selected microbatch to GPU before the model forward.
 
         if self.args.qkv_format == "bshd":
             # TODO: micro-batch wise dynamic, possibly move to @data.py:get_data_iterator

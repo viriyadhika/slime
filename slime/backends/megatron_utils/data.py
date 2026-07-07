@@ -25,6 +25,17 @@ from .cp_utils import (
 logger = logging.getLogger(__name__)
 
 
+def _move_multimodal_value_to_current_cuda(value):
+    device = torch.cuda.current_device()
+    if isinstance(value, np.ndarray):
+        return torch.from_numpy(value.copy()).to(device=device)
+    if isinstance(value, torch.Tensor):
+        return value if value.is_cuda and value.device.index == device else value.to(device=device)
+    if hasattr(value, "to"):
+        return value.to(device=device)
+    return torch.as_tensor(value, device=device)
+
+
 def get_batch(
     data_iterator: "DataIterator",
     keys: Sequence[str],
@@ -166,12 +177,13 @@ def get_batch(
         multimodal_data = {}  # key -> concatenated tensor
         for mm_input_dict in multimodal_train_inputs:
             if mm_input_dict is not None:
-                for key, mm_tensor in mm_input_dict.items():
+                for key, mm_value in mm_input_dict.items():
+                    mm_tensor = _move_multimodal_value_to_current_cuda(mm_value)
                     if key not in multimodal_data:
                         multimodal_data[key] = mm_tensor
                     else:
                         multimodal_data[key] = torch.cat([multimodal_data[key], mm_tensor], dim=0)
-        batch["multimodal_train_inputs"] = multimodal_data
+        batch["multimodal_train_inputs"] = multimodal_data or None
 
     return batch
 
