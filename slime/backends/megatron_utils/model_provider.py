@@ -21,6 +21,15 @@ from slime.utils.megatron_bridge_utils import patch_auto_bridge_hf_config
 from slime.utils.misc import load_function
 
 
+_BRIDGE_RECOMPUTE_FIELDS = (
+    "recompute_granularity",
+    "recompute_method",
+    "recompute_num_layers",
+    "distribute_saved_activations",
+    "recompute_modules",
+)
+
+
 # Adapt from https://github.com/volcengine/verl/blob/c3b20575d2bc815fcccd84bddb4c0401fc4b632b/verl/models/llama/megatron/layers/parallel_linear.py#L82
 class LinearForLastLayer(torch.nn.Linear):
     def __init__(
@@ -102,6 +111,9 @@ def _get_model_provider_func(
             provider.num_layers_in_first_pipeline_stage = args.decoder_first_pipeline_num_layers
         if getattr(args, "decoder_last_pipeline_num_layers", None) is not None:
             provider.num_layers_in_last_pipeline_stage = args.decoder_last_pipeline_num_layers
+        for name in _BRIDGE_RECOMPUTE_FIELDS:
+            if hasattr(args, name) and hasattr(provider, name):
+                setattr(provider, name, getattr(args, name))
         provider.finalize()
 
         if role == "critic":
